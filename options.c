@@ -97,6 +97,8 @@ int pause_on_output_change = 0;
 int block_key_paste = 1;
 int progress_bar = 1;
 int search_resets_position = 1;
+int fuzzy_search = 0;
+double fuzzy_search_max_error_rate = 0.2;
 
 int colors[NR_COLORS] = {
 	-1,
@@ -1411,6 +1413,39 @@ static void toggle_search_resets_position(void *data)
 	search_resets_position ^= 1;
 }
 
+static void get_fuzzy_search(void *data, char *buf, size_t size)
+{
+	strscpy(buf, bool_names[fuzzy_search], size);
+}
+
+static void set_fuzzy_search(void *data, const char *buf)
+{
+	parse_bool(buf, &fuzzy_search);
+}
+
+static void toggle_fuzzy_search(void *data)
+{
+	fuzzy_search ^= 1;
+}
+
+static void get_fuzzy_search_max_error_rate(void *data, char *buf, size_t size)
+{
+	snprintf(buf, size, "%f", fuzzy_search_max_error_rate);
+}
+
+static void set_fuzzy_search_max_error_rate(void *data, const char *buf)
+{
+	double rate;
+	char *end;
+
+	rate = strtod(buf, &end);
+	if (end == buf || rate < 0.0 || rate > 1.0) {
+		error_msg("floating point number in range 0.0..1.0 expected");
+		return;
+	}
+	fuzzy_search_max_error_rate = rate;
+}
+
 /* }}} */
 
 /* special callbacks (id set) {{{ */
@@ -1687,6 +1722,8 @@ static const struct {
 	DT(block_key_paste)
 	DT(progress_bar)
 	DT(search_resets_position)
+	DT(fuzzy_search)
+	DN(fuzzy_search_max_error_rate)
 	{ NULL, NULL, NULL, NULL, 0 }
 };
 

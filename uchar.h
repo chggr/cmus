@@ -264,4 +264,14 @@ char *u_strcasestr_base(const char *haystack, const char *needle);
  */
 char *u_strcasestr_filename(const char *haystack, const char *needle);
 
+/*
+ * @haystack       valid, normalized, null-terminated UTF-8 string
+ * @needle         valid, normalized, null-terminated UTF-8 string
+ * @max_error_rate maximum ratio of errors (0.0=exact, 1.0=all) relative to needle length
+ *
+ * Scored fuzzy match (subsequence match with quality filter).
+ * Returns 1 if errors <= ceil(needle_length * @max_error_rate), 0 otherwise.
+ */
+int u_strcase_fuzzy_match(const char *haystack, const char *needle, double max_error_rate);
+
 #endif

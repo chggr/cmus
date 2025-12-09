@@ -180,6 +180,8 @@ extern int pause_on_output_change;
 extern int block_key_paste;
 extern int progress_bar;
 extern int search_resets_position;
+extern int fuzzy_search;
+extern double fuzzy_search_max_error_rate;
 
 extern const char * const aaa_mode_names[];
 extern const char * const view_names[NR_VIEWS + 1];

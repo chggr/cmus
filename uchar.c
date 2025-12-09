@@ -28,6 +28,7 @@
 #include <wchar.h>
 #include <wctype.h>
 #include <ctype.h>
+#include <math.h>
 
 #include "unidecomp.h"
 #include "wcwidth_uchar.h"
@@ -671,3 +672,102 @@ char *u_strcasestr_filename(const char *haystack, const char *needle)
 	free(ustr);
 	return r;
 }
+
+int u_strcase_fuzzy_match(const char *haystack, const char *needle, double max_error_rate)
+{
+	/*
+	 * Algorithm: Dynamic Programming (Levenshtein Distance)
+	 *
+	 * We want to find if 'haystack' contains a substring that matches 'needle'
+	 * with at most 'max_errors'.
+	 *
+	 * DP State:
+	 * dp[j] = minimum edits to match needle[0..j-1] against some suffix of haystack
+	 *         ending at the current haystack character.
+	 *
+	 * Initialization:
+	 * dp[j] = j  (match needle prefix against empty text suffix requires j deletions)
+	 *
+	 * Recurrence for current text char 'C':
+	 * new_dp[0] = 0 (We can always start a new match here)
+	 * new_dp[j] = min(
+	 *    dp[j-1] + (match ? 0 : 1),  // Match or Substitute
+	 *    new_dp[j-1] + 1,            // Insert
+	 *    dp[j] + 1                   // Delete
+	  * )
+	 */
+
+	// Small buffer for DP row. Need needle_len + 1.
+	// Cap needle length for fuzzy search to avoid VLA or malloc.
+	#define MAX_NEEDLE_LEN 63
+	
+	/*
+	 * Need to count *unicode characters* in needle for array sizing and logic.
+	 * u_strlen is not free, but needle is small.
+	 */
+	int needle_char_count = 0;
+	
+	// Pre-parse needle into codepoints to avoid re-parsing O(N*M) times
+	uchar needle_runes[MAX_NEEDLE_LEN];
+	int n_idx = 0;
+	while (needle[n_idx]) {
+		if (needle_char_count >= MAX_NEEDLE_LEN) {
+			// Needle too long for this optimization. Fallback or fail.
+			// Fallback to exact match logic or just return 0.
+			return u_strcasestr_base(haystack, needle) != NULL;
+		}
+		needle_runes[needle_char_count++] = u_casefold_char(u_get_char(needle, &n_idx));
+	}
+
+	if (needle_char_count == 0)
+		return 1; // Empty needle matches everything
+
+	int max_errors = (int)ceil(needle_char_count * max_error_rate);
+
+	int dp[MAX_NEEDLE_LEN + 1];
+	int new_dp[MAX_NEEDLE_LEN + 1];
+
+	// Initialize DP row (distance from empty text suffix)
+	for (int j = 0; j <= needle_char_count; j++)
+		dp[j] = j;
+
+	int h_idx = 0;
+	uchar h_char;
+
+	while ((h_char = u_get_char(haystack, &h_idx))) {
+		uchar folded_h = u_casefold_char(h_char);
+
+		new_dp[0] = 0; // Always possible to start match here
+
+		for (int j = 1; j <= needle_char_count; j++) {
+			uchar needle_char = needle_runes[j - 1];
+			int cost = (folded_h == needle_char) ? 0 : 1;
+
+			// 1. Substitution / Match
+			int v1 = dp[j - 1] + cost;
+
+			// 2. Insertion (skip needle char)
+			int v2 = new_dp[j - 1] + 1;
+
+			// 3. Deletion (skip text char)
+			int v3 = dp[j] + 1;
+
+			int min_cost = v1;
+			if (v2 < min_cost) min_cost = v2;
+			if (v3 < min_cost) min_cost = v3;
+
+			new_dp[j] = min_cost;
+		}
+
+		// Check if we found a match ending here
+		if (new_dp[needle_char_count] <= max_errors)
+			return 1;
+
+		// Swap arrays
+		for (int j = 0; j <= needle_char_count; j++)
+			dp[j] = new_dp[j];
+	}
+
+	return 0;
+}
+

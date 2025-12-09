@@ -26,6 +26,7 @@
 #include "debug.h"
 #include "path.h"
 #include "ui_curses.h"
+#include "options.h"
 
 #include <string.h>
 #include <stdatomic.h>
@@ -169,12 +170,21 @@ int track_info_has_tag(const struct track_info *ti)
 	return ti->artist || ti->album || ti->title;
 }
 
+static inline int do_match(const char *haystack, const char *needle)
+{
+	if (fuzzy_search) {
+		return u_strcase_fuzzy_match(haystack, needle, fuzzy_search_max_error_rate);
+	}
+
+	return u_strcasestr_base(haystack, needle) != NULL;
+}
+
 static inline int match_word(const struct track_info *ti, const char *word, unsigned int flags)
 {
-	return ((flags & TI_MATCH_ARTIST) && ti->artist && u_strcasestr_base(ti->artist, word)) ||
-	       ((flags & TI_MATCH_ALBUM) && ti->album && u_strcasestr_base(ti->album, word)) ||
-	       ((flags & TI_MATCH_TITLE) && ti->title && u_strcasestr_base(ti->title, word)) ||
-	       ((flags & TI_MATCH_ALBUMARTIST) && ti->albumartist && u_strcasestr_base(ti->albumartist, word));
+	return ((flags & TI_MATCH_ARTIST) && ti->artist && do_match(ti->artist, word)) ||
+	       ((flags & TI_MATCH_ALBUM) && ti->album && do_match(ti->album, word)) ||
+	       ((flags & TI_MATCH_TITLE) && ti->title && do_match(ti->title, word)) ||
+	       ((flags & TI_MATCH_ALBUMARTIST) && ti->albumartist && do_match(ti->albumartist, word));
 }
 
 static inline int flags_set(const struct track_info *ti, unsigned int flags)
